@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -31,6 +32,7 @@ func NewServer() *Server {
 }
 
 func (s *Server) Listen(addr string) error {
+	log.Info("Starting SSH Server...")
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -63,7 +65,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		go func() {
 			for {
 				r := <-requests
-				fmt.Printf("Channel request: %q\n", r.Type)
+				log.Info(fmt.Sprintf("Channel request: %q", r.Type))
 				r.Reply(true, nil)
 			}
 		}()
@@ -71,10 +73,18 @@ func (s *Server) handleConn(conn net.Conn) {
 		go func() {
 			defer channel.Close()
 			StreamInstance := msgs.Stream()
-			fmt.Sprintf("new client! ID: %d", StreamInstance.id)
-			go io.Copy(channel, StreamInstance)
+			log.Info(fmt.Sprintf("client connected: %d", StreamInstance.Id()))
+			go func() {
+				for {
+					_, err := io.Copy(channel, StreamInstance)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+				}
+			}()
 			io.Copy(StreamInstance, channel)
-			fmt.Sprintf("client disconnected: %d", StreamInstance.id)
+			log.Info(fmt.Sprintf("client disconnected: %d", StreamInstance.Id()))
 		}()
 	}
 
@@ -108,7 +118,8 @@ func (m *MsgB0rker) Stream() *Stream {
 		id: len(m.messages),
 		m:  m,
 	}
-	m.messages = append(m.messages, &bytes.Buffer{})
+	var buf []byte
+	m.messages = append(m.messages, bytes.NewBuffer(buf))
 	return s
 }
 
@@ -134,12 +145,14 @@ type Stream struct {
 	m  *MsgB0rker
 }
 
-var _ io.ReadWriter = &Stream{}
-
 func (s *Stream) Read(p []byte) (int, error) {
 	return s.m.ReadFor(s.id, p)
 }
 
 func (s *Stream) Write(p []byte) (int, error) {
 	return s.m.WriteFrom(s.id, p)
+}
+
+func (s *Stream) Id() int {
+	return s.id
 }
