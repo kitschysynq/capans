@@ -118,8 +118,7 @@ func (m *MsgB0rker) Stream() *Stream {
 		id: len(m.messages),
 		m:  m,
 	}
-	var buf []byte
-	m.messages = append(m.messages, bytes.NewBuffer(buf))
+	m.messages = append(m.messages, &bytes.Buffer{})
 	return s
 }
 
