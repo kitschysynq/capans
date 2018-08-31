@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 
-	"github.com/apex/log"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -53,16 +53,17 @@ func (s *Server) handleConn(conn net.Conn) {
 		}
 
 		go acceptRequests(requests)
-		go handleMsgs(channel)
+		log.Infof("handling messages for topic %q", newChannel.ChannelType())
+		go handleMsgs(channel, newChannel.ChannelType())
 	}
 
 }
 
-func handleMsgs(channel ssh.Channel) {
-	StreamInstance := msgs.Stream()
+func handleMsgs(channel ssh.Channel, topic string) {
+	StreamInstance := msgs.Topic(topic).Stream()
 	defer channel.Close()
 	defer StreamInstance.Close()
-	log.Info(fmt.Sprintf("client connected: %d", StreamInstance.Id()))
+	log.Infof("client connected: %d", StreamInstance.Id())
 	doneChan := make(chan struct{})
 	go func() {
 		for {

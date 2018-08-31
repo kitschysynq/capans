@@ -5,14 +5,33 @@ import (
 	"io"
 )
 
-var msgs = &MsgB0rker{}
+var msgs = NewB0rker()
 
 type MsgB0rker struct {
+	topics map[string]*Topica
+}
+
+func NewB0rker() *MsgB0rker {
+	return &MsgB0rker{
+		topics: make(map[string]*Topica),
+	}
+}
+
+func (m *MsgB0rker) Topic(name string) *Topica {
+	t, ok := m.topics[name]
+	if !ok {
+		m.topics[name] = &Topica{}
+		t = m.topics[name]
+	}
+	return t
+}
+
+type Topica struct {
 	messages []*bytes.Buffer
 	free     []int
 }
 
-func (m *MsgB0rker) Stream() *Stream {
+func (m *Topica) Stream() *Stream {
 	if len(m.free) == 0 {
 		id := len(m.messages)
 		s := &Stream{
@@ -34,7 +53,7 @@ func (m *MsgB0rker) Stream() *Stream {
 	return s
 }
 
-func (m *MsgB0rker) WriteFrom(id int, p []byte) (int, error) {
+func (m *Topica) WriteFrom(id int, p []byte) (int, error) {
 	for i := range m.messages {
 		if i == id || m.messages[i] == nil {
 			continue
@@ -47,14 +66,14 @@ func (m *MsgB0rker) WriteFrom(id int, p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (m *MsgB0rker) Close(id int) {
+func (m *Topica) Close(id int) {
 	m.messages[id] = nil
 	m.free = append(m.free, id)
 }
 
 type Stream struct {
 	id  int
-	m   *MsgB0rker
+	m   *Topica
 	buf io.Reader
 }
 
