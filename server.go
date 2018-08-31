@@ -52,32 +52,30 @@ func (s *Server) handleConn(conn net.Conn) {
 			panic(err)
 		}
 
-		go func() {
-			for {
-				r := <-requests
-				log.Info(fmt.Sprintf("Channel request: %q", r.Type))
-				r.Reply(true, nil)
-			}
-		}()
-
-		go func() {
-			defer channel.Close()
-			StreamInstance := msgs.Stream()
-			log.Info(fmt.Sprintf("client connected: %d", StreamInstance.Id()))
-			go func() {
-				for {
-					_, err := io.Copy(channel, StreamInstance)
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
-				}
-			}()
-			io.Copy(StreamInstance, channel)
-			log.Info(fmt.Sprintf("client disconnected: %d", StreamInstance.Id()))
-		}()
+		go acceptRequests(requests)
+		go handleMsgs(channel)
 	}
 
+}
+
+func handleMsgs(channel ssh.Channel) {
+	StreamInstance := msgs.Stream()
+	defer channel.Close()
+	defer StreamInstance.Close()
+	log.Info(fmt.Sprintf("client connected: %d", StreamInstance.Id()))
+	doneChan := make(chan struct{})
+	go func() {
+		for {
+			_, err := io.Copy(channel, StreamInstance)
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+		}
+	}()
+	io.Copy(StreamInstance, channel)
+	close(doneChan)
+	log.Info(fmt.Sprintf("client disconnected: %d", StreamInstance.Id()))
 }
 
 func getSSHConfig() *ssh.ServerConfig {
@@ -97,4 +95,11 @@ func getSSHConfig() *ssh.ServerConfig {
 
 	cfg.AddHostKey(pKey)
 	return &cfg
+}
+
+func acceptRequests(in <-chan *ssh.Request) {
+	for r := range in {
+		log.Info(fmt.Sprintf("Channel request: %q", r.Type))
+		r.Reply(true, nil)
+	}
 }
